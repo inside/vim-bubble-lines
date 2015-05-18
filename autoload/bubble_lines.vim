@@ -18,26 +18,61 @@ endf
 
 func! s:MoveUp(line_getter, range)
   let l_num = line(a:line_getter)
-  if l_num - v:count1 - 1 < 0
-    let move_arg = "0"
-  else
-    let move_arg = a:line_getter." -".(v:count1 + 1)
-  endif
-  call s:Move(a:range."move ".move_arg)
+  let l_adjacent = l_num - 1
+  let move_arg = l_num - v:count1 - 1 < 0 ?
+        \ '0' :
+        \ printf('%s -%d', a:line_getter, v:count1 + 1)
+  let move_cmd = printf('%smove %s', a:range, move_arg)
+  let indent_cmd = s:GetIndentCmd(l_num, l_adjacent, a:range)
+
+  call s:Move(move_cmd, indent_cmd)
 endf
 
 func! s:MoveDown(line_getter, range)
   let l_num = line(a:line_getter)
-  if l_num + v:count1 > line("$")
-    let move_arg = "$"
+  let move_arg = l_num + v:count1 > line('$') ?
+        \ '$' :
+        \ printf('%s +%d', a:line_getter, v:count1)
+  let move_cmd = printf('%smove %s', a:range, move_arg)
+
+  if a:line_getter == '.'
+    let l_adjacent = l_num + 1
+    let l_first = l_num
   else
-    let move_arg = a:line_getter." +".v:count1
+    let l_adjacent = line("'>") + 1
+    let l_first = line("'<")
   endif
-  call s:Move(a:range."move ".move_arg)
+
+  let indent_cmd = s:GetIndentCmd(l_num, l_adjacent, a:range)
+
+  call s:Move(move_cmd, indent_cmd)
 endf
 
-func! s:Move(move_arg)
-  let col_num = virtcol('.')
-  execute 'silent! ' . a:move_arg
-  execute 'normal! ' . col_num . '|'
+func! s:GetIndentCmd(l_num, l_adjacent, range)
+  let l_indent = indent(a:l_num)
+  let l_adjacent_indent = indent(a:l_adjacent)
+  let indent_diff = l_indent - l_adjacent_indent
+  let indent_count = 0
+  let indent_cmd = ''
+
+  if indent_diff != 0
+    let indent_count = abs(indent_diff) / shiftwidth()
+
+    if l_indent < l_adjacent_indent
+      let indent_cmd = '>'
+    else
+      let indent_cmd = '<'
+    endif
+  endif
+
+  return a:range . repeat(indent_cmd, indent_count)
+endf
+
+func! s:Move(move_cmd, indent_cmd)
+  " Move the lines
+  execute 'silent! ' . a:move_cmd
+  " Indents to same level of adjacent lines
+  execute a:indent_cmd
+  " Preserve the cursors position
+  execute 'normal! ' . virtcol('.') . '|'
 endf
